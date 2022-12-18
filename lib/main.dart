@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 const spacer = SizedBox(height: 20);
+final navigatorKey = GlobalKey<NavigatorState>();
 
 /// The login information.
 class LoginInfo extends ChangeNotifier {
@@ -35,16 +36,77 @@ class MyApp extends StatelessWidget {
 
   final LoginInfo _loginInfo = LoginInfo();
 
+  late final _router = GoRouter(
+    navigatorKey: navigatorKey,
+    debugLogDiagnostics: true,
+    refreshListenable: _loginInfo,
+    routes: <GoRoute>[
+      GoRoute(
+        path: '/',
+        builder: (_, __) => const MyHomePage(),
+        routes: [
+          GoRoute(
+            path: 'profile',
+            builder: (_, __) => const ProfilePage(),
+            redirect: authGuard,
+          ),
+          GoRoute(
+            path: 'login',
+            builder: (_, __) => const LoginPage(),
+            redirect: (BuildContext context, GoRouterState state) {
+              /// Redirects to next page after login
+              /// /login?redirect_to=%2Fprofile
+              /// return /profile
+              if (_loginInfo.loggedIn) {
+                if (state.queryParams['redirect_to']?.isNotEmpty ?? false) {
+                  return state.queryParams['redirect_to']!;
+                } else {
+                  return '/';
+                }
+              } else {
+                return null;
+              }
+            },
+          ),
+        ],
+      ),
+    ],
+  );
+
+  String? authGuard(BuildContext context, GoRouterState state) {
+    // If not logged in redirects to login page also providing
+    // next page to redirect after login
+    if (_loginInfo.loggedIn) {
+      return null;
+    } else {
+      // return state.namedLocation(
+      //   Routes.login,
+      //   queryParams: {'redirect_to': state.location},
+      // );
+      // return GoRouter.of(context).namedLocation(
+      //   Routes.login,
+      //   queryParams: {'redirect_to': state.location},
+      // );
+
+      return Uri(
+        path: '/login',
+        queryParameters: {'redirect_to': state.location},
+      ).toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<LoginInfo>.value(
       value: _loginInfo,
-      child: MaterialApp.router(
-        title: 'GoRouter Demo',
-        theme: ThemeData(primarySwatch: Colors.blue),
-        routerConfig: _getRouter(_loginInfo),
-        debugShowCheckedModeBanner: false,
-      ),
+      child: Builder(builder: (context) {
+        return MaterialApp.router(
+          title: 'GoRouter Demo',
+          theme: ThemeData(primarySwatch: Colors.blue),
+          routerConfig: _router,
+          debugShowCheckedModeBanner: false,
+        );
+      }),
     );
   }
 }
@@ -57,6 +119,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  @override
+  void dispose() {
+    debugPrint('home disposed');
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +139,7 @@ class _MyHomePageState extends State<MyHomePage> {
           spacer,
           ElevatedButton(
             onPressed: () {
-              context.goNamed(Routes.profile);
+              context.go('/profile');
             },
             child: const Text('Go to profile'),
           ),
@@ -135,70 +203,4 @@ class LoginPage extends StatelessWidget {
       ),
     );
   }
-}
-
-GoRouter _getRouter(LoginInfo loginInfo) {
-  /// Returs login path if not logged in else returns null;
-  String? authGuard(BuildContext context, GoRouterState state) {
-    // If not logged in redirects to login page also providing
-    // next page to redirect after login
-    if (loginInfo.loggedIn) {
-      return null;
-    } else {
-      // return state.namedLocation(
-      //   Routes.login,
-      //   queryParams: {'redirect_to': state.location},
-      // );
-      return GoRouter.of(context).namedLocation(
-        Routes.login,
-        queryParams: {'redirect_to': state.location},
-      );
-    }
-  }
-
-  return GoRouter(
-    debugLogDiagnostics: true,
-    refreshListenable: loginInfo,
-    routes: <GoRoute>[
-      GoRoute(
-        path: '/',
-        name: Routes.home,
-        builder: (_, __) => const MyHomePage(),
-        routes: [
-          GoRoute(
-            path: 'login',
-            name: Routes.login,
-            builder: (_, __) => const LoginPage(),
-            redirect: (BuildContext context, GoRouterState state) {
-              /// Redirects to next page after login
-              if (loginInfo.loggedIn) {
-                if (state.queryParams['redirect_to']?.isNotEmpty ?? false) {
-                  return state.queryParams['redirect_to']!;
-                } else {
-                  return '/';
-                }
-              } else {
-                return null;
-              }
-            },
-          ),
-          GoRoute(
-            path: 'profile',
-            name: Routes.profile,
-            builder: (_, __) => const ProfilePage(),
-            redirect: authGuard,
-          ),
-        ],
-      ),
-    ],
-  );
-}
-
-class Routes {
-  const Routes._();
-
-  static const home = 'home';
-  static const login = 'login';
-
-  static const profile = 'profile';
 }
